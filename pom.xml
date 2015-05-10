@@ -19,7 +19,7 @@
 	<dependencies>
 
 		<dependency>
-			<groupId>fucksocks</groupId>
+			<groupId>${project.groupId}</groupId>
 			<artifactId>fucksocks</artifactId>
 			<version>1.0.0</version>
 		</dependency>
@@ -48,7 +48,7 @@
 
 	<build>
 
-		<finalName>esocks</finalName>
+		<finalName>${project.artifactId}-${project.version}</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
