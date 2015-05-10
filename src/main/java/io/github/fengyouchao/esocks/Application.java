@@ -15,10 +15,14 @@
 package io.github.fengyouchao.esocks;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.StringTokenizer;
 import java.util.concurrent.Executors;
 
+import fucksocks.client.Socks5;
+import fucksocks.client.SocksProxy;
 import fucksocks.common.methods.NoAuthencationRequiredMethod;
 import fucksocks.common.methods.SocksMethod;
 import fucksocks.common.methods.UsernamePasswordMethod;
@@ -46,6 +50,7 @@ public class Application {
     int timeout = TIMEOUT;
     List<SessionFilter> sessionFilters = new ArrayList<>();
     List<User> users = new ArrayList<>();
+    SocksProxy proxy = null;
 
     for (int i = 0; i < args.length; i++) {
       if (args[i].equals("-h")) {
@@ -163,6 +168,21 @@ public class Application {
         }
       }
 
+      if (args[i].equals("-P")) {
+        if (i + 1 < args.length) {
+          String proxyConfig = args[i + 1];
+          proxy = configProxy(proxyConfig);
+        }
+      }
+
+      if (args[i].startsWith("--proxy=")) {
+
+        String[] strs = args[i].split("=");
+        if (strs.length == 2) {
+          proxy = configProxy(strs[1]);
+        }
+      }
+
     }
 
     SocksProxyServer socksProxyServer =
@@ -178,6 +198,7 @@ public class Application {
 
     socksProxyServer.setBufferSize(bufferSize);
     socksProxyServer.setTimeout(timeout);
+    socksProxyServer.setProxy(proxy);
 
     for (SessionFilter filter : sessionFilters) {
       socksProxyServer.addSessionFilter(filter);
@@ -205,17 +226,54 @@ public class Application {
     System.out.println("Start SOCKS5 server at port:" + port);
   }
 
+  private static SocksProxy configProxy(String proxyConfigs) {
+    SocksProxy proxy = null;
+    StringTokenizer tokenizer = new StringTokenizer(proxyConfigs, ",");
+    boolean first = true;
+    while (tokenizer.hasMoreTokens()) {
+      String proxyConfig = tokenizer.nextToken();
+      System.out.println(proxyConfig);
+      StringTokenizer tokenizer2 = new StringTokenizer(proxyConfig, ":");
+      if (tokenizer2.countTokens() == 2) {
+        String host = tokenizer2.nextToken();
+        int port = Integer.parseInt(tokenizer2.nextToken());
+        if (first) {
+          proxy = new Socks5(new InetSocketAddress(host, port));
+        } else {
+          proxy.setChainProxy(new Socks5(new InetSocketAddress(host, port)));
+        }
+      } else if (tokenizer2.countTokens() == 4) {
+        String host = tokenizer2.nextToken();
+        int port = Integer.parseInt(tokenizer2.nextToken());
+        String username = tokenizer2.nextToken();
+        String password = tokenizer2.nextToken();
+        if (first) {
+          proxy = new Socks5(new InetSocketAddress(host, port), username, password);
+        } else {
+          proxy.setChainProxy(new Socks5(new InetSocketAddress(host, port), username, password));
+        }
+
+      }
+
+      first = false;
+    }
+    return proxy;
+  }
+
   private static void printUsage() {
     System.out.println("Usage:");
-    System.out.println("\t-p,--port=PORT:Set bind port. 1080 is default.");
-    System.out.println("\t-u,--user=USERNAME:PASSWORD,USERNAME2:PASSWORD2: Add users.");
+    System.out.println("\t-p,--port=PORT\n\t\tSet bind port. 1080 is default.");
+    System.out.println("\t-u,--user=USERNAME:PASSWORD,USERNAME2:PASSWORD2\n\t\tAdd users.");
     System.out
-        .println("\t--none-auth=[true|false]: Support anonymouse authentication. True is default.");
-    System.out.println("\t--max-connection=NUMB: Max number of connection. 100 is default.");
-    System.out.println("\t--timeout=NUM: Timeout in millisecond. 1 munite is default.");
-    System.out.println("\t--buffer-size=NUM Buffer size in byte. 1MB is default");
-    System.out.println("\t--white-list=IP-IP,IP Set white IP lists");
-    System.out.println("\t--black-list=IP-IP,IP Set black IP lists");
+        .println("\t--none-auth=[true|false]\n\t\tSupport anonymouse authentication. True is default.");
+    System.out.println("\t--max-connection=NUMB\n\t\tMax number of connection. 100 is default.");
+    System.out.println("\t--timeout=NUM\n\t\tTimeout in millisecond. 1 munite is default.");
+    System.out.println("\t--buffer-size=NUM\n\t\tBuffer size in byte. 1MB is default.");
+    System.out.println("\t--white-list=IP-IP,IP\n\t\tSet a white IP list.");
+    System.out.println("\t--black-list=IP-IP,IP\n\t\tSet a black IP list.");
+    System.out.println("\t-P,--proxy=IP:PORT:USERNAME:PASSWORD,IP2:PORT2:USERNAME2:PASSWORD2\n\t\t"
+        + "Set SOCKS5 proxy.If there is more than one proxy, esocks will regard them as proxy "
+        + "chain. Esocks only support TCP proxy.");
   }
 
   private static void loadUsers(List<User> users, String usersValue) {
