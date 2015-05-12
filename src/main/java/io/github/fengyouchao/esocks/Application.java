@@ -21,6 +21,9 @@ import java.util.List;
 import java.util.StringTokenizer;
 import java.util.concurrent.Executors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import fucksocks.client.Socks5;
 import fucksocks.client.SocksProxy;
 import fucksocks.common.methods.NoAuthencationRequiredMethod;
@@ -39,8 +42,10 @@ import fucksocks.server.filters.SessionFilter;
 
 public class Application {
 
+  private static final Logger logger = LoggerFactory.getLogger(Application.class);
+
   /**
-   * @param args
+   * @param args Arguments
    */
   public static void main(String[] args) {
     int port = PORT;
@@ -59,80 +64,62 @@ public class Application {
       }
     }
 
-
     for (int i = 0; i < args.length; i++) {
+
       if (args[i].startsWith("--port=")) {
 
         String[] strs = args[i].split("=");
         if (strs.length == 2) {
-          port = Integer.parseInt(strs[1]);
+          port = getPort(strs[1]);
         }
-      }
-
-      if (args[i].equals("-p")) {
+      } else if (args[i].equals("-p")) {
         if (i + 1 < args.length) {
-          try {
-            port = Integer.parseInt(args[i + 1]);
-          } catch (Exception e) {
-            System.out.println("[ERROR]:[-p] must be a number");
-            System.exit(-1);
-          }
+          port = getPort(args[i + 1]);
         }
-      }
-
-      if (args[i].equals("-u")) {
+      } else if (args[i].equals("-u")) {
         if (i + 1 < args.length) {
           loadUsers(users, args[i + 1]);
         }
-      }
-
-      if (args[i].startsWith("--user=")) {
+      } else if (args[i].startsWith("--user=")) {
 
         String[] strs = args[i].split("=");
         if (strs.length == 2) {
           loadUsers(users, strs[1]);
         }
-      }
-
-      if (args[i].startsWith("--none-auth=")) {
-
+      } else if (args[i].startsWith("--none-auth=")) {
         String[] strs = args[i].split("=");
         if (strs.length == 2) {
           if (strs[1].equals("true")) {
             noneAuth = true;
           } else if (strs[1].equals("false")) {
             noneAuth = false;
+          } else {
+            logger.error("[--none-auth] should be [true] or [false]");
+            System.exit(-1);
           }
         }
-      }
-
-      if (args[i].startsWith("--max-connection=")) {
+      } else if (args[i].startsWith("--max-connection=")) {
 
         String[] strs = args[i].split("=");
         if (strs.length == 2) {
           try {
             maxConnection = Integer.parseInt(strs[1]);
           } catch (Exception e) {
-            System.out.println("[ERROR]:[--max-connection] must be a number");
+            logger.error("[--max-connection] must be a number");
             System.exit(-1);
           }
         }
-      }
-
-      if (args[i].startsWith("--buffer-size=")) {
-
+      } else if (args[i].startsWith("--buffer-size=")) {
         String[] strs = args[i].split("=");
         if (strs.length == 2) {
           try {
             bufferSize = Integer.parseInt(strs[1]);
           } catch (Exception e) {
-            System.out.println("[ERROR]:[--buffer-size] must be a number");
+            logger.error("[--buffer-size] must be a number");
             System.exit(-1);
           }
         }
-      }
-
-      if (args[i].startsWith("--white-list=") || args[i].startsWith("--black-list=")) {
+      } else if (args[i].startsWith("--white-list=") || args[i].startsWith("--black-list=")) {
         String[] strs = args[i].split("=");
         if (strs.length == 2) {
           IpSessionFilter sessionFilter = new IpSessionFilter();
@@ -161,26 +148,26 @@ public class Application {
             }
             sessionFilters.add(sessionFilter);
           } catch (Exception e) {
-            System.out.println("[ERROR]:[" + args[i]
-                + "] formate error. For example:--white-list=1.1.1.1-1.1.2.255,192.128.22.1");
+            logger.error(
+                "[{}] formate error. For example:--white-list=1.1.1.1-1.1.2.255,192.128.22.1",
+                args[i]);
             System.exit(-1);
           }
         }
-      }
-
-      if (args[i].equals("-P")) {
+      } else if (args[i].equals("-P")) {
         if (i + 1 < args.length) {
           String proxyConfig = args[i + 1];
           proxy = configProxy(proxyConfig);
         }
-      }
-
-      if (args[i].startsWith("--proxy=")) {
+      } else if (args[i].startsWith("--proxy=")) {
 
         String[] strs = args[i].split("=");
         if (strs.length == 2) {
           proxy = configProxy(strs[1]);
         }
+      } else {
+        logger.error("Unknown argument [{}]", args[i]);
+        System.exit(-1);
       }
 
     }
@@ -198,6 +185,9 @@ public class Application {
 
     socksProxyServer.setBufferSize(bufferSize);
     socksProxyServer.setTimeout(timeout);
+    if (proxy != null) {
+      logger.info("Using proxy:{}", proxy);
+    }
     socksProxyServer.setProxy(proxy);
 
     for (SessionFilter filter : sessionFilters) {
@@ -215,32 +205,46 @@ public class Application {
       socksProxyServer.start(port);
     } catch (IOException e) {
       if (e.getMessage().equals("Address already in use")) {
-        System.out.println("[ERROR]:Port[" + port
-            + "] already in use.You can change port by using [-p] or [--port=NUM]");
+        logger.error(
+            "[ERROR]:Port[{}] already in use.You can change port by using [-p] or [--port=NUM]",
+            port);
         System.exit(-1);
       } else {
         e.printStackTrace();
       }
     }
 
-    System.out.println("Start SOCKS5 server at port:" + port);
+    logger.info("Start SOCKS5 server at port:{}", port);
+  }
+
+  private static int getPort(String port) {
+    try {
+      return Integer.parseInt(port);
+    } catch (NumberFormatException e) {
+      logger.error("[-p] must be a number");
+      System.exit(-1);
+    }
+    return 1080;
   }
 
   private static SocksProxy configProxy(String proxyConfigs) {
     SocksProxy proxy = null;
+    SocksProxy temp = null;
     StringTokenizer tokenizer = new StringTokenizer(proxyConfigs, ",");
     boolean first = true;
     while (tokenizer.hasMoreTokens()) {
       String proxyConfig = tokenizer.nextToken();
-      System.out.println(proxyConfig);
       StringTokenizer tokenizer2 = new StringTokenizer(proxyConfig, ":");
       if (tokenizer2.countTokens() == 2) {
         String host = tokenizer2.nextToken();
         int port = Integer.parseInt(tokenizer2.nextToken());
         if (first) {
-          proxy = new Socks5(new InetSocketAddress(host, port));
+          proxy = temp = new Socks5(new InetSocketAddress(host, port));
         } else {
-          proxy.setChainProxy(new Socks5(new InetSocketAddress(host, port)));
+          while (temp.getChainProxy() != null) {
+            temp = temp.getChainProxy();
+          }
+          temp.setChainProxy(new Socks5(new InetSocketAddress(host, port)));
         }
       } else if (tokenizer2.countTokens() == 4) {
         String host = tokenizer2.nextToken();
@@ -248,9 +252,12 @@ public class Application {
         String username = tokenizer2.nextToken();
         String password = tokenizer2.nextToken();
         if (first) {
-          proxy = new Socks5(new InetSocketAddress(host, port), username, password);
+          proxy = temp = new Socks5(new InetSocketAddress(host, port), username, password);
         } else {
-          proxy.setChainProxy(new Socks5(new InetSocketAddress(host, port), username, password));
+          while (temp.getChainProxy() != null) {
+            temp = temp.getChainProxy();
+          }
+          temp.setChainProxy(new Socks5(new InetSocketAddress(host, port), username, password));
         }
 
       }
