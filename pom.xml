@@ -7,7 +7,7 @@
 	<version>1.0.0-snapshot</version>
 	<packaging>jar</packaging>
 
-	<name>crawler</name>
+	<name>esocks</name>
 	<url>http://maven.apache.org</url>
 
 	<properties>

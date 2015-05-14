@@ -34,8 +34,8 @@ import fucksocks.server.Socks5Handler;
 import fucksocks.server.SocksProxyServer;
 import fucksocks.server.User;
 import fucksocks.server.UsernamePasswordAuthenticator;
-import fucksocks.server.filters.IpSessionFilter;
-import fucksocks.server.filters.IpSessionFilter.Mode;
+import fucksocks.server.filters.IPSessionFilter;
+import fucksocks.server.filters.IPSessionFilter.Mode;
 import fucksocks.server.filters.SessionFilter;
 
 
@@ -122,7 +122,7 @@ public class Application {
       } else if (args[i].startsWith("--white-list=") || args[i].startsWith("--black-list=")) {
         String[] strs = args[i].split("=");
         if (strs.length == 2) {
-          IpSessionFilter sessionFilter = new IpSessionFilter();
+          IPSessionFilter sessionFilter = new IPSessionFilter();
           if (args[i].startsWith("--black-list")) {
             sessionFilter.setMode(Mode.BLACK_LIST);
           }
