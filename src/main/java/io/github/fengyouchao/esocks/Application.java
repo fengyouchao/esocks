@@ -15,21 +15,21 @@
 package io.github.fengyouchao.esocks;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.StringTokenizer;
 import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import fucksocks.client.Socks5;
 import fucksocks.client.SocksProxy;
+import fucksocks.client.SocksProxyFactory;
+import fucksocks.common.SSLConfiguration;
 import fucksocks.common.methods.NoAuthencationRequiredMethod;
 import fucksocks.common.methods.SocksMethod;
 import fucksocks.common.methods.UsernamePasswordMethod;
 import fucksocks.server.GenericSocksProxyServer;
+import fucksocks.server.SSLSocksProxyServer;
 import fucksocks.server.Socks5Handler;
 import fucksocks.server.SocksProxyServer;
 import fucksocks.server.User;
@@ -56,6 +56,7 @@ public class Application {
     List<SessionFilter> sessionFilters = new ArrayList<>();
     List<User> users = new ArrayList<>();
     SocksProxy proxy = null;
+    SSLConfiguration configuration = null;
 
     for (int i = 0; i < args.length; i++) {
       if (args[i].equals("-h")) {
@@ -75,16 +76,20 @@ public class Application {
       } else if (args[i].equals("-p")) {
         if (i + 1 < args.length) {
           port = getPort(args[i + 1]);
+          i++;
         }
       } else if (args[i].equals("-u")) {
         if (i + 1 < args.length) {
           loadUsers(users, args[i + 1]);
+          noneAuth = false;
+          i++;
         }
       } else if (args[i].startsWith("--user=")) {
 
         String[] strs = args[i].split("=");
         if (strs.length == 2) {
           loadUsers(users, strs[1]);
+          noneAuth = false;
         }
       } else if (args[i].startsWith("--none-auth=")) {
         String[] strs = args[i].split("=");
@@ -158,12 +163,18 @@ public class Application {
         if (i + 1 < args.length) {
           String proxyConfig = args[i + 1];
           proxy = configProxy(proxyConfig);
+          i++;
         }
       } else if (args[i].startsWith("--proxy=")) {
 
         String[] strs = args[i].split("=");
         if (strs.length == 2) {
           proxy = configProxy(strs[1]);
+        }
+      } else if (args[i].startsWith("--ssl=")) {
+        String[] strs = args[i].split("=");
+        if (strs.length == 2) {
+          configuration = SSLConfiguration.parse(strs[1]);
         }
       } else {
         logger.error("Unknown argument [{}]", args[i]);
@@ -172,10 +183,16 @@ public class Application {
 
     }
 
-    SocksProxyServer socksProxyServer =
-        new GenericSocksProxyServer(Socks5Handler.class,
-            Executors.newFixedThreadPool(maxConnection));
-
+    SocksProxyServer socksProxyServer = null;
+    if (configuration == null) {
+      socksProxyServer =
+          new GenericSocksProxyServer(Socks5Handler.class,
+              Executors.newFixedThreadPool(maxConnection));
+    } else {
+      socksProxyServer =
+          new SSLSocksProxyServer(Socks5Handler.class, Executors.newFixedThreadPool(maxConnection),
+              configuration);
+    }
     UsernamePasswordAuthenticator authenticator = new UsernamePasswordAuthenticator();
     for (User user : users) {
       authenticator.addUser(user.getUsername(), user.getPassword());
@@ -230,39 +247,22 @@ public class Application {
   private static SocksProxy configProxy(String proxyConfigs) {
     SocksProxy proxy = null;
     SocksProxy temp = null;
-    StringTokenizer tokenizer = new StringTokenizer(proxyConfigs, ",");
-    boolean first = true;
-    while (tokenizer.hasMoreTokens()) {
-      String proxyConfig = tokenizer.nextToken();
-      StringTokenizer tokenizer2 = new StringTokenizer(proxyConfig, ":");
-      if (tokenizer2.countTokens() == 2) {
-        String host = tokenizer2.nextToken();
-        int port = Integer.parseInt(tokenizer2.nextToken());
-        if (first) {
-          proxy = temp = new Socks5(new InetSocketAddress(host, port));
+    String[] proxyStrings = proxyConfigs.split("->");
+    for (int i = 0; i < proxyStrings.length; i++) {
+      String value = proxyStrings[i];
+      try {
+        if (i == 0) {
+          temp = SocksProxyFactory.parse(value);
+          proxy = temp;
         } else {
-          while (temp.getChainProxy() != null) {
-            temp = temp.getChainProxy();
-          }
-          temp.setChainProxy(new Socks5(new InetSocketAddress(host, port)));
+          SocksProxy socksProxy = SocksProxyFactory.parse(value);
+          temp.setChainProxy(socksProxy);
+          temp = socksProxy;
         }
-      } else if (tokenizer2.countTokens() == 4) {
-        String host = tokenizer2.nextToken();
-        int port = Integer.parseInt(tokenizer2.nextToken());
-        String username = tokenizer2.nextToken();
-        String password = tokenizer2.nextToken();
-        if (first) {
-          proxy = temp = new Socks5(new InetSocketAddress(host, port), username, password);
-        } else {
-          while (temp.getChainProxy() != null) {
-            temp = temp.getChainProxy();
-          }
-          temp.setChainProxy(new Socks5(new InetSocketAddress(host, port), username, password));
-        }
-
+      } catch (Exception e) {
+        e.printStackTrace();
       }
 
-      first = false;
     }
     return proxy;
   }
@@ -272,15 +272,18 @@ public class Application {
     System.out.println("\t-p,--port=PORT\n\t\tSet bind port. 1080 is default.");
     System.out.println("\t-u,--user=USERNAME:PASSWORD,USERNAME2:PASSWORD2\n\t\tAdd users.");
     System.out
-        .println("\t--none-auth=[true|false]\n\t\tSupport anonymouse authentication. True is default.");
+        .println("\t--none-auth=[true|false]\n\t\tSupport anonymouse authentication. False is default.");
     System.out.println("\t--max-connection=NUMB\n\t\tMax number of connection. 100 is default.");
     System.out.println("\t--timeout=NUM\n\t\tTimeout in millisecond. 1 munite is default.");
     System.out.println("\t--buffer-size=NUM\n\t\tBuffer size in byte. 1MB is default.");
     System.out.println("\t--white-list=IP-IP,IP\n\t\tSet a white IP list.");
     System.out.println("\t--black-list=IP-IP,IP\n\t\tSet a black IP list.");
-    System.out.println("\t-P,--proxy=IP:PORT:USERNAME:PASSWORD,IP2:PORT2:USERNAME2:PASSWORD2\n\t\t"
-        + "Set SOCKS5 proxy.If there is more than one proxy, esocks will regard them as proxy "
-        + "chain. Esocks only support TCP proxy.");
+    System.out
+        .println("\t-P,--proxy=IP,PORT,USERNAME,PASSWORD->IP2,PORT2,USERNAME2,PASSWORD2\n\t\t"
+            + "Set SOCKS5 proxy.If there is more than one proxy, esocks will regard them as proxy "
+            + "chain. Esocks only support TCP proxy.");
+    System.out
+        .println("\t--ssl=KEY_STORE,KEY_STORE_PASSWORD,TRUST_KEY_STORE,TRUST_KEY_STORE_PASSWORD\n\t\tUse SSL.");
   }
 
   private static void loadUsers(List<User> users, String usersValue) {
