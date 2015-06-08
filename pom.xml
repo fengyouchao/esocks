@@ -4,7 +4,7 @@
 
 	<groupId>io.github.fengyouchao</groupId>
 	<artifactId>esocks</artifactId>
-	<version>1.0.0-snapshot</version>
+	<version>1.0.0</version>
 	<packaging>jar</packaging>
 
 	<name>esocks</name>
@@ -22,19 +22,6 @@
 			<groupId>${project.groupId}</groupId>
 			<artifactId>fucksocks</artifactId>
 			<version>1.0.0</version>
-		</dependency>
-
-		<!-- log -->
-		<dependency>
-			<groupId>log4j</groupId>
-			<artifactId>log4j</artifactId>
-			<version>${log4j.version}</version>
-		</dependency>
-
-		<dependency>
-			<groupId>org.slf4j</groupId>
-			<artifactId>slf4j-log4j12</artifactId>
-			<version>${slf4j-log4j.version}</version>
 		</dependency>
 
 		<dependency>
