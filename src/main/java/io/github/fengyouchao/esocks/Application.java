@@ -32,7 +32,7 @@ import fucksocks.server.GenericSocksProxyServer;
 import fucksocks.server.SSLSocksProxyServer;
 import fucksocks.server.Socks5Handler;
 import fucksocks.server.SocksProxyServer;
-import fucksocks.server.User;
+import fucksocks.server.manager.User;
 import fucksocks.server.UsernamePasswordAuthenticator;
 import fucksocks.server.filters.IPSessionFilter;
 import fucksocks.server.filters.IPSessionFilter.Mode;
